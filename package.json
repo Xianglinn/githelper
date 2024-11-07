@@ -10,7 +10,9 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:package-explorer"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -18,9 +20,31 @@
         "command": "extension.openChatbot",
         "title": "Open Chatbot",
         "category": "Git Helper"
+      },
+      {
+        "command": "extension.refreshCustomView",
+        "title": "Refresh My Custom View"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+          {
+            "id": "veryImportant",
+            "title": "Git Helper",
+            "icon": "media/dep.svg"
+          }
+      ]
+    },
+    "views": {
+      "veryImportant": [
+          {
+              "id": "myCustomView",
+              "name": "My Custom View"
+          }
+      ]
+    }
   },
+
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",

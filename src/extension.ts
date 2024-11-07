@@ -1,6 +1,7 @@
 import path from 'path';
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { MyCustomViewProvider } from './myCustomView';
 
 export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
@@ -33,6 +34,13 @@ export function activate(context: vscode.ExtensionContext) {
             );
         })
     );
+    console.log('Extension "my-extension" is now active!');
+
+    const myCustomViewProvider = new MyCustomViewProvider();
+    vscode.window.registerTreeDataProvider('myCustomView', myCustomViewProvider);
+
+    // Add command to refresh the view if needed
+    context.subscriptions.push(vscode.commands.registerCommand('extension.refreshCustomView', () => myCustomViewProvider.refresh()));
 }
 
 // Function to simulate handling user messages with predefined responses
