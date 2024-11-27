@@ -1,7 +1,8 @@
 import path from 'path';
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { MyCustomViewProvider } from './myCustomView';
+import axios from 'axios';
+import { Stream } from 'stream';
 
 export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
@@ -20,13 +21,19 @@ export function activate(context: vscode.ExtensionContext) {
 
             // Handle messages from the webview
             panel.webview.onDidReceiveMessage(
-                (message) => {
+                async (message) => {
                     if (message.command === 'newMessage') {
                         const userMessage = message.text;
-                        // Generate a predefined reply
-                        const reply = handleUserMessage(userMessage);
-                        // Send the reply back to the webview
-                        panel.webview.postMessage({ command: 'displayResponse', text: reply });
+                        
+                        // Send the user message to the Ollama model
+                        try {
+                            const reply = await queryOllamaModel(userMessage);
+                            // Send the reply back to the webview
+                            panel.webview.postMessage({ command: 'displayResponse', text: reply });
+                        } catch (error) {
+                            console.error("Error querying Ollama model:", error);
+                            panel.webview.postMessage({ command: 'displayResponse', text: "Error connecting to Ollama." });
+                        }
                     }
                 },
                 undefined,
@@ -34,37 +41,39 @@ export function activate(context: vscode.ExtensionContext) {
             );
         })
     );
+
     console.log('Extension "my-extension" is now active!');
-
-    const myCustomViewProvider = new MyCustomViewProvider();
-    vscode.window.registerTreeDataProvider('myCustomView', myCustomViewProvider);
-
-    // Add command to refresh the view if needed
-    context.subscriptions.push(vscode.commands.registerCommand('extension.refreshCustomView', () => myCustomViewProvider.refresh()));
 }
 
-// Function to simulate handling user messages with predefined responses
-function handleUserMessage(userMessage: string): string {
-    // Simple predefined responses
-    const responses: { [key: string]: string } = {
-        "hello": "Hello! How can I help you today?",
-        "how are you": "I'm a bot, but thanks for asking! How are you?",
-        "what's your name": "I'm your helpful chatbot assistant!",
-        "bye": "Goodbye! Feel free to reach out anytime."
-    };
+// Function to query the Ollama API
+async function queryOllamaModel(userMessage: string): Promise<string> {
+    const API_URL = 'http://127.0.0.1:11434/api/generate'; // Update with Ollama's API URL
+    const MODEL_NAME = 'llama3:latest'; // Replace with your Ollama model name
 
-    // Check if there's a predefined response
-    const lowercasedMessage = userMessage.toLowerCase();
-    if (responses[lowercasedMessage]) {
-        return responses[lowercasedMessage];
-    } else {
-        return "I'm here to help! Could you please rephrase your question?";
+    try {
+        const response = await axios.post(API_URL, {
+            model: MODEL_NAME,
+            prompt: userMessage,
+            stream: false
+        });
+        console.log("API Response:", response.data); // Log the full response
+        return response.data.response || "No response received.";
+    } catch (error) {
+        // console.error("Error querying Ollama:", error.message);
+        throw error;
     }
 }
 
-// Function to define the HTML content for the chatbot UI
 // Function to define the HTML content for the chatbot UI
 function getWebviewContent(context: vscode.ExtensionContext): string {
     const htmlPath = path.join(context.extensionPath, 'gui.html');
     return fs.readFileSync(htmlPath, 'utf8');
 }
+
+
+// curl http://127.0.0.1:11434/api/generate -d '{ "model": "llama3:latest", "prompt":"Why is the sky blue?"}'
+
+// Invoke-WebRequest -Uri "http://127.0.0.1:11434/api/generate" `
+//     -Method POST `
+//     -ContentType "application/json" `
+//     -Body '{ "model": "llama3:latest", "prompt": "Why is the sky blue?", "stream": false }' `
