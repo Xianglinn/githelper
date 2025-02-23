@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import axios from 'axios';
 import { exec } from 'child_process';
+import { getHtmlContent } from './utils/htmlContent';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('GitHelper Extension Activated!');
@@ -51,7 +52,7 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [this._extensionUri]
         };
 
-        webviewView.webview.html = this.getHtmlContent();
+        webviewView.webview.html = getHtmlContent(this._extensionUri);
 
         webviewView.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
@@ -104,7 +105,7 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
 
     private async sendToLLM(message: string): Promise<string> {
         const API_URL = 'http://127.0.0.1:11434/api/generate'; // Update with Ollama's API URL
-        const MODEL_NAME = 'GitHelper:latest'; 
+        const MODEL_NAME = 'GitHelper:latest';
     
         try {
             const response = await axios.post(API_URL, {
@@ -118,47 +119,6 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
             // console.error("Error querying Ollama:", error.message);
             throw error;
         }
-    }
-
-    private getHtmlContent() {
-        return `<!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>GitHelper</title>
-        </head>
-        <body>
-            <h1>GitHelper Logs</h1>
-            <div id="content" style="white-space: pre-wrap; font-family: monospace;"></div>
-            <textarea id="chatInput" rows="4" style="width: 100%;"></textarea>
-            <button id="sendMessage">Send to LLM</button>
-            <button id="clearLogs">Clear Logs</button>
-            <div id="chatResponse" style="margin-top: 1em; font-family: sans-serif; color: #333;"></div>
-
-            <script>
-                const vscode = acquireVsCodeApi();
-
-                document.getElementById('clearLogs').addEventListener('click', () => {
-                    vscode.postMessage({ command: 'clearLogs' });
-                });
-
-                document.getElementById('sendMessage').addEventListener('click', () => {
-                    const text = document.getElementById('chatInput').value;
-                    vscode.postMessage({ command: 'sendMessage', text });
-                });
-
-                window.addEventListener('message', (event) => {
-                    const message = event.data;
-                    if (message.type === 'updateContent') {
-                        document.getElementById('content').innerText = message.content || 'No logs available.';
-                    } else if (message.type === 'chatResponse') {
-                        document.getElementById('chatResponse').innerText = message.response;
-                    }
-                });
-            </script>
-        </body>
-        </html>`;
     }
 }
 
