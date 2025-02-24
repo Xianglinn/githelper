@@ -50,8 +50,8 @@
             background-color: #252526;
             border-top: 1px solid #333;
             display: flex;
+            align-items: center;
             gap: 10px;
-            height: 80px;
         }
         .chatbox input {
             flex: 1;
@@ -62,13 +62,18 @@
             color: #ffffff;
             font-size: 1rem;
         }
+        .chatbox .buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
         .chatbox button {
-            padding: 15px 25px;
+            padding: 5px 10px;
             border: none;
             border-radius: 5px;
             background-color: #007acc;
             color: white;
-            font-size: 1rem;
+            font-size: 0.9rem;
             cursor: pointer;
         }
         .chatbox button:hover {
@@ -79,6 +84,7 @@
             height: 1.5rem;
             border-radius: 50%;
             vertical-align: middle;
+            margin-bottom: -0.2rem; /* Adjust this value to align the icons */
         }
         .message-wrapper {
             display: flex;
@@ -116,7 +122,10 @@
     </div>
     <div class="chatbox">
         <input type="text" id="chatInput" placeholder="Ask a question about Git..." />
-        <button id="sendMessage">Send</button>
+        <div class="buttons">
+            <button id="sendMessage">Send</button>
+            <button id="clearMessages">Clear</button>
+        </div>
     </div>
     <script>
         const vscode = acquireVsCodeApi();
@@ -125,11 +134,24 @@
         const chatHistory = document.getElementById('chatHistory');
         const chatInput = document.getElementById('chatInput');
         const sendMessageButton = document.getElementById('sendMessage');
+        const clearMessagesButton = document.getElementById('clearMessages');
+
+        // Restore chat history from state
+        const state = vscode.getState();
+        if (state && state.chatHistory) {
+            chatHistory.innerHTML = state.chatHistory;
+            chatHistory.classList.add('visible');
+            mainContent.classList.add('hidden');
+        }
 
         function sendMessage() {
             const input = chatInput.value.trim();
             if (input) {
-                vscode.postMessage({ command: 'sendMessage', text: input });
+                if (input === '@gitlog') {
+                    vscode.postMessage({ command: 'analyzeGitLog' });
+                } else {
+                    vscode.postMessage({ command: 'sendMessage', text: input });
+                }
 
                 // Hide main content after first input
                 mainContent.classList.add('hidden');
@@ -139,16 +161,19 @@
                 userMessageWrapper.className = 'message-wrapper user-message';
                 const userMessage = document.createElement('div');
                 userMessage.className = 'message';
-                userMessage.innerHTML = `<strong>
+                userMessage.innerHTML = `<div class="response-header">
     <svg class='logo' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'>
         <circle cx='50' cy='50' r='40' fill='white'/>
         <text x='50%' y='55%' font-size='50' text-anchor='middle' fill='black' font-family='Arial' font-weight='bold' dominant-baseline='middle'>U</text>
     </svg>
-    User:
-</strong>
+    <strong>User:</strong>
+</div>
 ${input}`;
                 userMessageWrapper.appendChild(userMessage);
                 chatHistory.appendChild(userMessageWrapper);
+
+                // Save chat history to state
+                vscode.setState({ chatHistory: chatHistory.innerHTML });
 
                 // Clear input and show chat history
                 chatInput.value = '';
@@ -159,8 +184,18 @@ ${input}`;
             }
         }
 
+        function clearMessages() {
+            chatHistory.innerHTML = '';
+            vscode.setState({ chatHistory: '' });
+            chatHistory.classList.remove('visible');
+            mainContent.classList.remove('hidden');
+        }
+
         // Handle click event for send button
         sendMessageButton.addEventListener('click', sendMessage);
+
+        // Handle click event for clear button
+        clearMessagesButton.addEventListener('click', clearMessages);
 
         // Handle Enter key press
         chatInput.addEventListener('keydown', (event) => {
@@ -189,6 +224,9 @@ ${input}`;
 ${message.response}`;
                 llmMessageWrapper.appendChild(llmMessage);
                 chatHistory.appendChild(llmMessageWrapper);
+
+                // Save chat history to state
+                vscode.setState({ chatHistory: chatHistory.innerHTML });
 
                 // Scroll to the bottom of the chat history
                 chatHistory.scrollTop = chatHistory.scrollHeight;
