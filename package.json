@@ -7,39 +7,42 @@
   "engines": {
     "vscode": "^1.80.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Xianglinn/githelper"
+  },
   "categories": [
     "Other"
   ],
   "activationEvents": [
-    "onCommand:githelper.fetchGitLog",
     "onCommand:githelper.sendGitLogToLLM",
     "onCommand:githelper.openChatbot"
   ],
   "main": "./out/extension.js",
   "contributes": {
-      "views": {
-          "explorer": [
-              {
-                  "type": "webview",
-                  "id": "githelper.gitView",
-                  "name": "GitHelper Logs & Chat"
-              }
-          ]
-      },
-      "commands": [
-          {
-              "command": "githelper.fetchGitLog",
-              "title": "Fetch Git Log"
-          },
-          {
-              "command": "githelper.clearLogs",
-              "title": "Clear Logs"
-          },
-          {
-              "command": "githelper.openChat",
-              "title": "Open Chat"
-          }
+    "views": {
+      "explorer": [
+        {
+          "type": "webview",
+          "id": "githelper.gitView",
+          "name": "GitHelper Logs & Chat"
+        }
       ]
+    },
+    "commands": [
+      {
+        "command": "githelper.fetchGitLog",
+        "title": "Fetch Git Log"
+      },
+      {
+        "command": "githelper.clearLogs",
+        "title": "Clear Logs"
+      },
+      {
+        "command": "githelper.openChat",
+        "title": "Open Chat"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -49,13 +52,21 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/node": "^14.14.0",
+    "@types/node": "^14.18.63",
     "@types/vscode": "^1.80.0",
     "@vscode/test-electron": "^2.2.3",
-    "typescript": "^4.9.4"
+    "typescript": "^5.8.2"
   },
   "dependencies": {
+    "@browserbasehq/stagehand": "^1.14.0",
+    "@ibm-cloud/watsonx-ai": "^1.6.0",
+    "@langchain/community": "^0.3.36",
+    "@langchain/core": "^0.3.40",
+    "@langchain/ollama": "^0.2.0",
+    "@playwright/test": "^1.42.1",
     "axios": "^1.7.8",
+    "deepmerge": "^4.3.1",
+    "ibm-cloud-sdk-core": "^5.3.2",
     "openai": "^4.7.1"
   }
 }

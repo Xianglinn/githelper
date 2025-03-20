@@ -2,6 +2,13 @@ import * as vscode from 'vscode';
 import axios from 'axios';
 import { exec } from 'child_process';
 import { getHtmlContent } from './utils/htmlContent';
+import { Ollama } from "@langchain/ollama";
+import * as path from 'path';
+
+const model = new Ollama({
+    baseUrl: "http://127.0.0.1:11434", // Your local Ollama server
+    model: "GitHelper:latest", // Your local model name
+  });
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('GitHelper Extension Activated!');
@@ -104,22 +111,56 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async sendToLLM(message: string): Promise<string> {
-        const API_URL = 'http://127.0.0.1:11434/api/generate'; // Update with Ollama's API URL
-        const MODEL_NAME = 'GitHelper:latest';
+        if (message.toLowerCase().includes("store git log")) {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            let filePath: string;
     
-        try {
-            const response = await axios.post(API_URL, {
-                model: MODEL_NAME,
-                prompt: message,
-                stream: false
-            });
-            console.log("API Response:", response.data); // Log the full response
-            return response.data.response || "No response received.";
-        } catch (error) {
-            // console.error("Error querying Ollama:", error.message);
-            throw error;
+            if (workspaceFolders && workspaceFolders.length > 0) {
+                // Store in the workspace folder
+                const localFolderPath = path.join(workspaceFolders[0].uri.fsPath, 'local');
+                filePath = path.join(localFolderPath, 'git_log.txt');
+    
+                // Ensure the "local" folder exists
+                await vscode.workspace.fs.createDirectory(vscode.Uri.file(localFolderPath));
+            } else {
+                // Store in the extension's global storage path
+                const globalStoragePath = this._extensionUri.fsPath;
+                const localFolderPath = path.join(globalStoragePath, 'local');
+                filePath = path.join(localFolderPath, 'git_log.txt');
+    
+                // Ensure the "local" folder exists
+                await vscode.workspace.fs.createDirectory(vscode.Uri.file(localFolderPath));
+            }
+
+            try {
+                const logs = await this.fetchGitLog();
+                // Write the git log to git_log.txt
+                await vscode.workspace.fs.writeFile(vscode.Uri.file(filePath), Buffer.from(logs, 'utf8'));
+                return "Git log stored successfully!";
+            } catch (error) {
+                console.error("Error storing git log:", error);
+                return "Failed to store git log.";
+            }
+            
+        } else {
+            try {
+                const response = await model.invoke([
+                    [
+                        "system",
+                        "Chat"
+                    ],
+                    [
+                        "human", 
+                        message
+                    ],
+                ]);
+                return response;
+            } catch (error) {
+                console.error("Error querying LLM:", error);
+                return "Failed to get response from LLM.";
+            }
         }
-    }
+      }
 }
 
 export function deactivate() {
