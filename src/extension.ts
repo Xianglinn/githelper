@@ -4,11 +4,13 @@ import { exec } from 'child_process';
 import { getHtmlContent } from './utils/htmlContent';
 import { Ollama } from "@langchain/ollama";
 import * as path from 'path';
+import { fetchGitLog, gitClone, gitStatus, gitLog, getGitRecommendation } from './utils/util_function';
+
 
 const model = new Ollama({
     baseUrl: "http://127.0.0.1:11434", // Your local Ollama server
     model: "GitHelper:latest", // Your local model name
-  });
+});
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('GitHelper Extension Activated!');
@@ -74,6 +76,13 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
                         response: response || 'No response from LLM.',
                     });
                     break;
+                // case 'analyzeGitLog':
+                //     await this.analyzeGitLog();
+                //     webviewView.webview.postMessage({
+                //         type: 'chatResponse',
+                //         response: 'Git log analyzed and memorized.',
+                //     });
+                // break;
             }
         });
     }
@@ -92,15 +101,7 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
         }
 
         const workspacePath = workspaceFolders[0].uri.fsPath;
-        return new Promise((resolve, reject) => {
-            exec('git log --oneline --graph --decorate --all', { cwd: workspacePath }, (err, stdout) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(stdout);
-                }
-            });
-        });
+        return fetchGitLog(workspacePath);
     }
 
     public openChat() {
@@ -114,12 +115,12 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
         if (message.toLowerCase().includes("store git log")) {
             const workspaceFolders = vscode.workspace.workspaceFolders;
             let filePath: string;
-    
+
             if (workspaceFolders && workspaceFolders.length > 0) {
                 // Store in the workspace folder
                 const localFolderPath = path.join(workspaceFolders[0].uri.fsPath, 'local');
                 filePath = path.join(localFolderPath, 'git_log.txt');
-    
+
                 // Ensure the "local" folder exists
                 await vscode.workspace.fs.createDirectory(vscode.Uri.file(localFolderPath));
             } else {
@@ -127,7 +128,7 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
                 const globalStoragePath = this._extensionUri.fsPath;
                 const localFolderPath = path.join(globalStoragePath, 'local');
                 filePath = path.join(localFolderPath, 'git_log.txt');
-    
+
                 // Ensure the "local" folder exists
                 await vscode.workspace.fs.createDirectory(vscode.Uri.file(localFolderPath));
             }
@@ -141,17 +142,31 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
                 console.error("Error storing git log:", error);
                 return "Failed to store git log.";
             }
-            
+        } else if (message.toLowerCase().includes("git") && message.toLowerCase().includes("recommendation")) {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                return "No workspace folder is open.";
+            }
+
+            try {
+                const recommendation = await getGitRecommendation(workspaceFolders[0].uri.fsPath, message);
+                return recommendation;
+            } catch (error) {
+                console.error("Error getting git recommendation:", error);
+                return "Failed to get git recommendation.";
+            }
         } else {
             try {
+                const status = await gitStatus(vscode.workspace.workspaceFolders![0].uri.fsPath);
+                const log = await gitLog(vscode.workspace.workspaceFolders![0].uri.fsPath);
                 const response = await model.invoke([
                     [
                         "system",
-                        "Chat"
+                        "You are a helpful assistant, focused on providing guidance for Git-related tasks. If the user ask for unrelated information, please tell them you are not able to help with that.",
                     ],
                     [
-                        "human", 
-                        message
+                        "user", 
+                        message+"\n"+status+"\n"+log,
                     ],
                 ]);
                 return response;
@@ -160,7 +175,7 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
                 return "Failed to get response from LLM.";
             }
         }
-      }
+    }
 }
 
 export function deactivate() {
