@@ -20,12 +20,22 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "githelper",
+          "title": "GitHelper",
+          "icon": "./media/dep.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "githelper": [
         {
           "type": "webview",
           "id": "githelper.gitView",
-          "name": "GitHelper Logs & Chat"
+          "name": "Logs & Chat",
+          "icon": "./media/dep.svg"
         }
       ]
     },

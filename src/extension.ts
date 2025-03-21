@@ -5,7 +5,7 @@ import { getHtmlContent } from './utils/htmlContent';
 import { Ollama } from "@langchain/ollama";
 import * as path from 'path';
 import { fetchGitLog, gitClone, gitStatus, gitLog, getGitRecommendation } from './utils/util_function';
-
+import { performance } from 'perf_hooks';
 
 const model = new Ollama({
     baseUrl: "http://127.0.0.1:11434", // Your local Ollama server
@@ -70,11 +70,47 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
                     vscode.window.showInformationMessage('Logs cleared from Webview!');
                     break;
                 case 'sendMessage':
+                    const cpuStart = process.cpuUsage();
+                    const timeStart = performance.now();
+                    const memStart = process.memoryUsage();
                     const response = await this.sendToLLM(message.text);
                     webviewView.webview.postMessage({
                         type: 'chatResponse',
                         response: response || 'No response from LLM.',
                     });
+
+                    setTimeout(() => {
+                        const cpuEnd = process.cpuUsage(cpuStart);
+                        const timeEnd = performance.now();
+                        const memEnd = process.memoryUsage();
+                    
+                        // Time
+                        const elapsed = (timeEnd - timeStart).toFixed(2);
+                    
+                        // CPU
+                        const userCPU = (cpuEnd.user / 1000).toFixed(2);     // μs → ms
+                        const systemCPU = (cpuEnd.system / 1000).toFixed(2);
+                        const totalCPU = (parseFloat(userCPU) + parseFloat(systemCPU)).toFixed(2);
+                    
+                        // Memory
+                        const heapUsed = ((memEnd.heapUsed - memStart.heapUsed) / 1024 / 1024).toFixed(2);
+                        const heapTotal = (memEnd.heapTotal / 1024 / 1024).toFixed(2);
+                        const rss = (memEnd.rss / 1024 / 1024).toFixed(2);
+                    
+                        // Console output
+                        console.log(`Average Time: ${elapsed} ms`);
+                        console.log(`CPU Usage:
+                        • User: ${userCPU} ms
+                        • System: ${systemCPU} ms
+                        • Total: ${totalCPU} ms`);
+                        console.log(`Average Memory Usage:
+                        • Heap Used Delta: ${heapUsed} MB
+                        • Heap Total: ${heapTotal} MB
+                        • RSS: ${rss} MB`);
+                    
+                        // Quick summary popup
+                        vscode.window.showInformationMessage(`Time ${elapsed}ms | CPU: ${totalCPU}ms | Heap: ${heapUsed}MB`);
+                    }, 0); // Replace this with your actual async function
                     break;
                 // case 'analyzeGitLog':
                 //     await this.analyzeGitLog();
@@ -112,28 +148,22 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async sendToLLM(message: string): Promise<string> {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            return "No workspace folder is open.";
+        }
+    
+        const workspacePath = workspaceFolders[0].uri.fsPath;
+    
         if (message.toLowerCase().includes("store git log")) {
-            const workspaceFolders = vscode.workspace.workspaceFolders;
             let filePath: string;
-
-            if (workspaceFolders && workspaceFolders.length > 0) {
-                // Store in the workspace folder
-                const localFolderPath = path.join(workspaceFolders[0].uri.fsPath, 'local');
-                filePath = path.join(localFolderPath, 'git_log.txt');
-
-                // Ensure the "local" folder exists
-                await vscode.workspace.fs.createDirectory(vscode.Uri.file(localFolderPath));
-            } else {
-                // Store in the extension's global storage path
-                const globalStoragePath = this._extensionUri.fsPath;
-                const localFolderPath = path.join(globalStoragePath, 'local');
-                filePath = path.join(localFolderPath, 'git_log.txt');
-
-                // Ensure the "local" folder exists
-                await vscode.workspace.fs.createDirectory(vscode.Uri.file(localFolderPath));
-            }
-
+            const localFolderPath = path.join(workspacePath, 'local');
+            filePath = path.join(localFolderPath, 'git_log.txt');
+    
             try {
+                // Ensure the "local" folder exists
+                await vscode.workspace.fs.createDirectory(vscode.Uri.file(localFolderPath));
+    
                 const logs = await this.fetchGitLog();
                 // Write the git log to git_log.txt
                 await vscode.workspace.fs.writeFile(vscode.Uri.file(filePath), Buffer.from(logs, 'utf8'));
@@ -143,13 +173,8 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
                 return "Failed to store git log.";
             }
         } else if (message.toLowerCase().includes("git") && message.toLowerCase().includes("recommendation")) {
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (!workspaceFolders || workspaceFolders.length === 0) {
-                return "No workspace folder is open.";
-            }
-
             try {
-                const recommendation = await getGitRecommendation(workspaceFolders[0].uri.fsPath, message);
+                const recommendation = await getGitRecommendation(workspacePath, message);
                 return recommendation;
             } catch (error) {
                 console.error("Error getting git recommendation:", error);
@@ -157,16 +182,20 @@ class GitHelperViewProvider implements vscode.WebviewViewProvider {
             }
         } else {
             try {
-                const status = await gitStatus(vscode.workspace.workspaceFolders![0].uri.fsPath);
-                const log = await gitLog(vscode.workspace.workspaceFolders![0].uri.fsPath);
+                // Fetch status and log in parallel
+                const [status, log] = await Promise.all([
+                    gitStatus(workspacePath),
+                    gitLog(workspacePath)
+                ]);
+    
                 const response = await model.invoke([
                     [
                         "system",
-                        "You are a helpful assistant, focused on providing guidance for Git-related tasks. If the user ask for unrelated information, please tell them you are not able to help with that.",
+                        "You are a helpful assistant, focused on providing guidance for Git-related tasks. If the user asks for unrelated information, please tell them you are not able to help with that. Your name is GitHelper. Your author is team 2024892.",
                     ],
                     [
                         "user", 
-                        message+"\n"+status+"\n"+log,
+                        `${message}\n${status}\n${log}`,
                     ],
                 ]);
                 return response;
